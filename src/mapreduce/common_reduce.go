@@ -1,9 +1,14 @@
 package mapreduce
 
+import (
+	"encoding/json"
+	"os"
+)
+
 func doReduce(
 	jobName string, // the name of the whole MapReduce job
 	reduceTask int, // which reduce task this is
-	outFile string, // write the output here
+	outFileName string, // write the output here
 	nMap int, // the number of map tasks that were run ("M" in the paper)
 	reduceF func(key string, values []string) string,
 ) {
@@ -30,7 +35,7 @@ func doReduce(
 	// for that key. reduceF() returns the reduced value for that key.
 	//
 	// You should write the reduce output as JSON encoded KeyValue
-	// objects to the file named outFile. We require you to use JSON
+	// objects to the file named outFileName. We require you to use JSON
 	// because that is what the merger than combines the output
 	// from all the reduce tasks expects. There is nothing special about
 	// JSON -- it is just the marshalling format we chose to use. Your
@@ -44,4 +49,24 @@ func doReduce(
 	//
 	// Your code here (Part I).
 	//
+
+	keyToValues := make(map[string][]string)
+
+	for i := 0; i < nMap; i++ {
+		fileName := reduceName(jobName, i, reduceTask)
+		f, _ := os.Open(fileName)
+		defer f.Close()
+		decoder := json.NewDecoder(f)
+		var pair KeyValue
+		for decoder.Decode(&pair) == nil {
+			keyToValues[pair.Key] = append(keyToValues[pair.Key], pair.Value)
+		}
+	}
+
+	outFile, _ := os.Create(outFileName)
+	defer outFile.Close()
+	enc := json.NewEncoder(outFile)
+	for k, vs := range keyToValues {
+		enc.Encode(KeyValue{k, reduceF(k, vs)})
+	}
 }
